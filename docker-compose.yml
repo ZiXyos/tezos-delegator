@@ -1,0 +1,76 @@
+services:
+  delegator:
+    build:
+      context: ./
+      dockerfile: ./Dockerfile
+      args:
+        TARGET_OS: linux
+        TARGET_ARCH: amd64
+    ports:
+      - "8888:8888"
+    volumes:
+      - go_mod_cache:/go/pkg/mod
+      - go_build_cache:/root/.cache/go-build
+    environment:
+      - GO_ENV=local
+      - APP_ENV=local
+      - PORT=8888
+      - CONFIG_PATH=/app/conf/config.local.toml
+    networks:
+      - delegator_local
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=3", "--spider", "http://localhost:8888/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  postgres:
+    image: postgres:15-alpine
+    ports:
+      - "54323:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    environment:
+      - POSTGRES_DB=delegator_local
+      - POSTGRES_USER=delegator
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256
+    networks:
+      - delegator_local
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U delegator -d delegator_local"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  adminer:
+    image: adminer:4.8.1
+    ports:
+      - "8881:8080"
+    environment:
+      - ADMINER_DEFAULT_SERVER=postgres
+    depends_on:
+      - postgres
+    networks:
+      - delegator_local
+    restart: unless-stopped
+networks:
+  delegator_local:
+    driver: bridge
+    name: delegator_local
+
+volumes:
+  postgres_data:
+    driver: local
+    name: delegator-local-postgres
+  go_mod_cache:
+    driver: local
+    name: delegator-local-go-mod
+  go_build_cache:
+    driver: local
+    name: delegator-local-go-build
+

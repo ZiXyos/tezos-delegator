@@ -1,0 +1,17 @@
+[delegator]
+    [delegator.service]
+    name = ""
+    version = ""
+
+    [delegator.http]
+    port = 8888
+    read_timeout = 3600
+    write_timeout = 3600
+
+    [delegator.storage]
+        [delegator.storage.database]
+        address = "localhost"
+        port = "54323"
+        username = "delegator"
+        database = "delegator_stake"
+        password = "password"
