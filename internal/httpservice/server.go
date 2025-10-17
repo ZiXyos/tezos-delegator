@@ -1,10 +1,12 @@
-package http
+package httpservice
 
 import (
 	"context"
+	"delegator/conf"
 	"errors"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -19,16 +21,16 @@ type Server struct {
 
 type Options func(*Server)
 
-func WithHTTPServer(conf any) Options {
+func WithHTTPServer(conf *conf.DelegatorConfig) Options {
 	return func(h *Server) {
 		if h.engine == nil {
 			panic(errors.New("ErrEngineErrorOrder"))
 		}
 		h.server = &http.Server{
-			Addr:         ":8088",
+			Addr:         ":" + strconv.Itoa(conf.HTTP.Port),
 			Handler:      h.engine,
-			ReadTimeout:  5 * time.Second,
-			WriteTimeout: 5 * time.Second,
+			ReadTimeout:  time.Duration(conf.HTTP.ReadTimeout) * time.Second,
+			WriteTimeout: time.Duration(conf.HTTP.WriteTimeout) * time.Second,
 		}
 	}
 }
