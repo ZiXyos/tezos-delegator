@@ -1,6 +1,8 @@
 package services
 
 import (
+	"delegator/pkg/domain"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -33,7 +35,7 @@ func HandlerWithBaseURL(baseURL string) HandlerOptions {
 	}
 }
 
-func (h *HTTPHandler) GetDelegations() (any, error) {
+func (h *HTTPHandler) GetDelegations() ([]domain.TzktApiDelegationsResponse, error) {
 	// https://api.tzkt.io/#operation/Operations_GetDelegations
 	res, err := h.client.Get(h.baseURL + "operations/delegations?limit=1000&sort.desc=id")
 
@@ -60,7 +62,13 @@ func (h *HTTPHandler) GetDelegations() (any, error) {
 		return nil, err
 	}
 
-	return data, nil
+	var response []domain.TzktApiDelegationsResponse
+	if err := json.Unmarshal(data, &response); err != nil {
+		h.logger.Warn("error unmarshaling delegations: ", err)
+		return nil, fmt.Errorf("failed to unmarshal delegations: %w", err)
+	}
+
+	return response, nil
 
 }
 

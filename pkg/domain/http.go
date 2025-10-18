@@ -2,12 +2,12 @@ package domain
 
 import "time"
 
-type Delegations struct {
-	timestamp time.Time
-	amount    int64
-	delegator string
-	level     string
+type DelegationsResponseType struct {
+	Timestamp time.Time `json:"timestamp"`
+	Amount    int64     `json:"amount"`
+	Delegator string    `json:"delegator"`
+	Level     int64     `json:"level"`
 }
-type Response struct {
-	data []Delegations
+type ApiResponse[T any] struct {
+	Data []T `json:"data"`
 }

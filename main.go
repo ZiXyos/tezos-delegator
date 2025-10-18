@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"delegator/conf"
 	"delegator/internal/core/delegator"
+	"delegator/internal/core/indexer"
 	"delegator/internal/database"
 	"delegator/internal/httpservice"
 	"delegator/internal/httpservice/routes"
@@ -89,6 +90,16 @@ func main() {
 		os.Exit(84)
 	}
 
+	delegatorRepository := delegator.NewRepository(
+		delegator.RepositoryWithLogger(logger),
+		delegator.RepositoryWithDBClient(dbDriver),
+	)
+
+	delegatorUseCase := delegator.NewUseCase(
+		delegator.UseCaseWithLogger(logger),
+		delegator.UseCaseWithRepository(delegatorRepository),
+	)
+
 	engine := gin.New()
 	httpClient := &http.Client{Timeout: time.Duration(delegatorConf.HTTP.ReadTimeout) * time.Second}
 
@@ -96,7 +107,9 @@ func main() {
 		httpservice.WithEngine(engine),
 		httpservice.WithLogger(logger),
 		httpservice.WithHTTPServer(delegatorConf),
-		httpservice.WithRoutes(routes.RegisterBaseRoutes),
+		httpservice.WithRoutes(
+			routes.CreateDelegatorRegistrar(logger, delegatorUseCase),
+		),
 	)
 
 	tzktHTTPHandler := services.NewHTTPHandler(
@@ -105,14 +118,14 @@ func main() {
 		services.HandlerWithBaseURL("https://api.tzkt.io/v1/"), // TODO: Add tzkt config
 	)
 
-	tzktClient := services.NewTzktClient(
-		services.WithLogger(logger),
-		services.WithHandler(tzktHTTPHandler),
+	indexerComponent := indexer.NewDelegatorIndexer(
+		indexer.WithLogger(logger),
+		indexer.WithDelegationHandler(tzktHTTPHandler),
 	)
 
 	delegatorService := delegator.NewDelegator(
 		delegator.WithLogger(logger),
-		delegator.WithComponents(httpServer, tzktClient),
+		delegator.WithComponents(httpServer, indexerComponent),
 	)
 
 	app := serviceloader.New(
