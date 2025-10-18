@@ -25,7 +25,12 @@ func RunMigrations(db *sql.DB, fs embed.FS) error {
 	if err != nil {
 		return fmt.Errorf("could not create migration instance: %w", err)
 	}
-	defer migration.Close()
+	defer func(migration *migrate.Migrate) {
+		err, _ := migration.Close()
+		if err != nil {
+			return
+		}
+	}(migration)
 
 	if err := migration.Up(); err != nil && err != migrate.ErrNoChange {
 		return fmt.Errorf("could not run migrations: %w", err)

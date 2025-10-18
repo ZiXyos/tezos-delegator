@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"delegator/conf"
 	"delegator/internal/core/delegator"
-	"delegator/internal/core/indexer"
+	"delegator/internal/core/delegator/indexer"
 	"delegator/internal/database"
 	"delegator/internal/httpservice"
 	"delegator/internal/httpservice/routes"
@@ -64,6 +64,15 @@ func main() {
 		os.Exit(84)
 	}
 
+	dbDriver.SetMaxOpenConns(25)
+	dbDriver.SetMaxIdleConns(5)
+	dbDriver.SetConnMaxLifetime(5 * time.Minute)
+
+	if err := dbDriver.Ping(); err != nil {
+		logger.Warn("failed to ping database", "error", err)
+		os.Exit(84)
+	}
+
 	pgClient, err := database.NewClient(
 		ctx,
 		database.WithLogger(logger),
@@ -75,7 +84,7 @@ func main() {
 		os.Exit(84)
 	}
 
-	_, err = gorm.Open(postgres.New(postgres.Config{
+	gormDriver, err := gorm.Open(postgres.New(postgres.Config{
 		Conn: pgClient.Driver,
 	}))
 
@@ -84,15 +93,23 @@ func main() {
 		os.Exit(84)
 	}
 
-	err = database.RunMigrations(pgClient.Driver, migrationFS)
+	// Create separate connection for migrations to avoid closing the main connection
+	migrationDB, err := sql.Open("postgres", connectionString)
+	if err != nil {
+		logger.Warn("failed to open migration database connection", "error", err)
+		os.Exit(84)
+	}
+	
+	err = database.RunMigrations(migrationDB, migrationFS)
 	if err != nil {
 		logger.Warn("failed to run migrations", "error", err)
 		os.Exit(84)
 	}
+	// migrationDB will be closed by the migration.Close() call
 
 	delegatorRepository := delegator.NewRepository(
 		delegator.RepositoryWithLogger(logger),
-		delegator.RepositoryWithDBClient(dbDriver),
+		delegator.RepositoryWithDBClient(gormDriver),
 	)
 
 	delegatorUseCase := delegator.NewUseCase(
@@ -121,11 +138,12 @@ func main() {
 	indexerComponent := indexer.NewDelegatorIndexer(
 		indexer.WithLogger(logger),
 		indexer.WithDelegationHandler(tzktHTTPHandler),
+		indexer.WithDelegatorUseCase(delegatorUseCase),
 	)
 
 	delegatorService := delegator.NewDelegator(
 		delegator.WithLogger(logger),
-		delegator.WithComponents(httpServer, indexerComponent),
+		delegator.WithComponents(pgClient, httpServer, indexerComponent),
 	)
 
 	app := serviceloader.New(

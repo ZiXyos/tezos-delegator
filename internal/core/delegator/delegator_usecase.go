@@ -2,8 +2,10 @@ package delegator
 
 import (
 	"context"
+	"delegator/internal/models"
 	"delegator/pkg/domain"
 	"log/slog"
+	"time"
 )
 
 // UseCaseImpl represent the use case implementation tf the delegator.
@@ -30,8 +32,75 @@ func UseCaseWithRepository(repository domain.Repository) UseCaseOption {
 }
 
 // Create will create a new delegation.
-func (uc *UseCaseImpl) Create(ctx context.Context, data []byte) error {
-	return uc.repository.Create(ctx, data)
+func (uc *UseCaseImpl) Create(ctx context.Context, data []domain.TzktApiDelegationsResponse) error {
+	createDTOs := make([]domain.CreateDelegationDTO, 0, len(data))
+
+	for _, apiResponse := range data {
+		if apiResponse.Type != "delegation" || apiResponse.Status != "applied" {
+			continue
+		}
+
+		timestamp, err := time.Parse("2006-01-02T15:04:05Z", apiResponse.Timestamp)
+		if err != nil {
+			uc.logger.Warn("failed to parse timestamp", "timestamp", apiResponse.Timestamp, "error", err)
+			continue
+		}
+
+		delegatorAddress := ""
+		if apiResponse.Sender != nil {
+			delegatorAddress = apiResponse.Sender.Address
+		}
+
+		if delegatorAddress == "" {
+			uc.logger.Warn("missing delegator address", "delegator", delegatorAddress)
+			continue
+		}
+
+		bakerAddress := ""
+		isUndelegation := apiResponse.NewDelegate == nil
+
+		if !isUndelegation {
+			bakerAddress = apiResponse.NewDelegate.Address
+		} else {
+			bakerAddress = "UNDELEGATED"
+		}
+
+		baker := models.Baker{
+			Address:   bakerAddress,
+			FirstSeen: timestamp,
+			LastSeen:  timestamp,
+		}
+
+		delegation := models.Delegation{
+			Delegator:       delegatorAddress,
+			BakerID:         bakerAddress,
+			Amount:          apiResponse.Amount,
+			Timestamp:       timestamp,
+			Level:           apiResponse.Level,
+			OperationHash:   &apiResponse.Hash,
+			IsNewDelegation: !isUndelegation && apiResponse.PrevDelegate == nil, // New delegation to a baker with no previous
+			PreviousBaker:   nil,
+			IndexedAt:       time.Now(),
+		}
+
+		if apiResponse.PrevDelegate != nil {
+			delegation.PreviousBaker = &apiResponse.PrevDelegate.Address
+		}
+
+		createDTO := domain.CreateDelegationDTO{
+			Baker:      baker,
+			Delegation: delegation,
+		}
+
+		createDTOs = append(createDTOs, createDTO)
+	}
+
+	if len(createDTOs) == 0 {
+		uc.logger.Info("no valid delegations to create")
+		return nil
+	}
+
+	return uc.repository.Create(ctx, createDTOs)
 }
 
 // GetDelegations return all delegations.

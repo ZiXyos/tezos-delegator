@@ -37,7 +37,7 @@ func HandlerWithBaseURL(baseURL string) HandlerOptions {
 
 func (h *HTTPHandler) GetDelegations() ([]domain.TzktApiDelegationsResponse, error) {
 	// https://api.tzkt.io/#operation/Operations_GetDelegations
-	res, err := h.client.Get(h.baseURL + "operations/delegations?limit=1000&sort.desc=id")
+	res, err := h.client.Get(h.baseURL + "operations/delegations?limit=1&sort.desc=id")
 
 	if err != nil {
 		h.logger.Warn("error getting delegations: ", err)

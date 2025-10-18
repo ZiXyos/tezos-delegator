@@ -28,23 +28,15 @@ func WithLogger(logger *slog.Logger) Option {
 }
 
 func (p *PGClient) Run(ctx context.Context) error {
-	go func() {
-		tx, err := p.Driver.BeginTx(ctx, nil)
-		if err != nil {
-			p.Logger.Warn("failed to begin tx")
-		}
-
-		err = tx.Commit()
-		if err != nil {
-			p.Logger.Warn("failed to commit tx")
-			return
-		}
-	}()
-
+	p.Logger.Info("database client running")
 	return nil
 }
 
 func (p *PGClient) Shutdown(ctx context.Context) error {
+	p.Logger.Info("shutting down database client")
+	if p.Driver != nil {
+		return p.Driver.Close()
+	}
 	return nil
 }
 
