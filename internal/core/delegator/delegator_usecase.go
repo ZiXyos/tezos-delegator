@@ -33,10 +33,13 @@ func UseCaseWithRepository(repository domain.Repository) UseCaseOption {
 
 // Create will create a new delegation.
 func (uc *UseCaseImpl) Create(ctx context.Context, data []domain.TzktApiDelegationsResponse) error {
+	uc.logger.Info("processing API responses", "total", len(data))
 	createDTOs := make([]domain.CreateDelegationDTO, 0, len(data))
 
-	for _, apiResponse := range data {
+	for i, apiResponse := range data {
+		uc.logger.Info("processing delegation", "index", i, "type", apiResponse.Type, "status", apiResponse.Status, "level", apiResponse.Level)
 		if apiResponse.Type != "delegation" || apiResponse.Status != "applied" {
+			uc.logger.Info("skipping delegation", "reason", "wrong type or status", "type", apiResponse.Type, "status", apiResponse.Status)
 			continue
 		}
 
@@ -78,7 +81,7 @@ func (uc *UseCaseImpl) Create(ctx context.Context, data []domain.TzktApiDelegati
 			Timestamp:       timestamp,
 			Level:           apiResponse.Level,
 			OperationHash:   &apiResponse.Hash,
-			IsNewDelegation: !isUndelegation && apiResponse.PrevDelegate == nil, // New delegation to a baker with no previous
+			IsNewDelegation: !isUndelegation && apiResponse.PrevDelegate == nil,
 			PreviousBaker:   nil,
 			IndexedAt:       time.Now(),
 		}

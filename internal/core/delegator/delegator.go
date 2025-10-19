@@ -33,9 +33,11 @@ func (d *DelegatorService) Run(ctx context.Context) error {
 
 	for _, handler := range d.components {
 		go func(h domain.Handler) {
-			defer d.logger.Warn("stopping service", "name", "delegator")
+			defer func() {
+				d.logger.Info("component stopped", "name", "delegator", "component", h)
+			}()
 			if err := h.Run(ctx); err != nil {
-				d.logger.Warn("component failed", "name", "delegator")
+				d.logger.Warn("component failed", "name", "delegator", "error", err)
 			}
 		}(handler)
 	}

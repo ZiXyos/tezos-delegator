@@ -12,6 +12,7 @@ type DelegatorIndexer struct {
 
 	delegatorUseCase  domain.UseCase
 	DelegationHandler domain.DelegationService
+	repository        domain.Repository
 }
 
 type Options func(*DelegatorIndexer)
@@ -34,6 +35,12 @@ func WithDelegationHandler(delegationHandler domain.DelegationService) Options {
 	}
 }
 
+func WithRepository(repository domain.Repository) Options {
+	return func(i *DelegatorIndexer) {
+		i.repository = repository
+	}
+}
+
 func (d *DelegatorIndexer) Run(ctx context.Context) error {
 	d.logger.Info("starting delegator indexer")
 
@@ -52,19 +59,43 @@ func (d *DelegatorIndexer) Run(ctx context.Context) error {
 		case <-ticker.C:
 			if err := d.indexOnce(ctx); err != nil {
 				d.logger.Warn("indexing failed", "error", err)
-				// Continue running even if one iteration fails
 			}
 		}
 	}
 }
 
 func (d *DelegatorIndexer) indexOnce(ctx context.Context) error {
-	data, err := d.DelegationHandler.GetDelegations()
+	count, err := d.repository.CountDelegations(ctx)
+	if err != nil {
+		d.logger.Warn("failed to count delegations", "error", err)
+		return err
+	}
+
+	var data []domain.TzktApiDelegationsResponse
+	if count == 0 {
+		d.logger.Info("database is empty, fetching initial batch of recent delegations")
+		data, err = d.DelegationHandler.GetDelegationsFromLevel(0, 1000)
+	} else {
+		lastLevel, err := d.repository.GetLastProcessedLevel(ctx)
+		if err != nil {
+			d.logger.Warn("failed to get last processed level", "error", err)
+			return err
+		}
+
+		d.logger.Info("fetching new delegations", "lastLevel", lastLevel)
+		data, err = d.DelegationHandler.GetDelegationsFromLevel(lastLevel, 100)
+	}
+
 	if err != nil {
 		return err
 	}
 
-	d.logger.Info("got delegations", "count", len(data))
+	if len(data) == 0 {
+		d.logger.Info("no new delegations found")
+		return nil
+	}
+
+	d.logger.Info("processing delegations", "count", len(data))
 	return d.delegatorUseCase.Create(ctx, data)
 }
 

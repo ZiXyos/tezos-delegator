@@ -93,19 +93,17 @@ func main() {
 		os.Exit(84)
 	}
 
-	// Create separate connection for migrations to avoid closing the main connection
 	migrationDB, err := sql.Open("postgres", connectionString)
 	if err != nil {
 		logger.Warn("failed to open migration database connection", "error", err)
 		os.Exit(84)
 	}
-	
+
 	err = database.RunMigrations(migrationDB, migrationFS)
 	if err != nil {
 		logger.Warn("failed to run migrations", "error", err)
 		os.Exit(84)
 	}
-	// migrationDB will be closed by the migration.Close() call
 
 	delegatorRepository := delegator.NewRepository(
 		delegator.RepositoryWithLogger(logger),
@@ -139,6 +137,7 @@ func main() {
 		indexer.WithLogger(logger),
 		indexer.WithDelegationHandler(tzktHTTPHandler),
 		indexer.WithDelegatorUseCase(delegatorUseCase),
+		indexer.WithRepository(delegatorRepository),
 	)
 
 	delegatorService := delegator.NewDelegator(

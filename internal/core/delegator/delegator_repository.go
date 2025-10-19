@@ -7,6 +7,7 @@ import (
 	"log/slog"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type Repository struct {
@@ -58,27 +59,56 @@ func (r *Repository) FindAll(ctx context.Context) ([]models.Delegation, error) {
 	return res, nil
 }
 
+func (r *Repository) GetLastProcessedLevel(ctx context.Context) (int64, error) {
+	var maxLevel int64
+	err := r.dbClient.Model(&models.Delegation{}).
+		Select("COALESCE(MAX(level), 0)").
+		Scan(&maxLevel).Error
+	if err != nil {
+		r.logger.Warn("error getting last processed level", "error", err)
+		return 0, err
+	}
+	r.logger.Info("last processed level", "level", maxLevel)
+	return maxLevel, nil
+}
+
+func (r *Repository) CountDelegations(ctx context.Context) (int64, error) {
+	var count int64
+	err := r.dbClient.Model(&models.Delegation{}).Count(&count).Error
+	if err != nil {
+		r.logger.Warn("error counting delegations", "error", err)
+		return 0, err
+	}
+	return count, nil
+}
+
 func (r *Repository) createDelegation(ctx context.Context, delegation models.Delegation) error {
+	r.logger.Info("attempting to create delegation", "delegator", delegation.Delegator, "level", delegation.Level, "hash", delegation.OperationHash)
 	res := gorm.WithResult()
 	err := gorm.G[models.Delegation](r.dbClient, res).Create(ctx, &delegation)
 	if err != nil {
-		r.logger.Warn("error while creating delegator", "error", err)
+		r.logger.Warn("error while creating delegator", "error", err, "delegator", delegation.Delegator, "level", delegation.Level)
 		return err
 	}
 
-	r.logger.Info("create delegator", delegation.ID)
+	r.logger.Info("successfully created delegation", "id", delegation.ID, "delegator", delegation.Delegator, "level", delegation.Level)
 	return nil
 }
 
 func (r *Repository) createBaker(ctx context.Context, baker models.Baker) error {
-	res := gorm.WithResult()
-	err := gorm.G[models.Baker](r.dbClient, res).Create(ctx, &baker)
+	err := r.dbClient.WithContext(ctx).
+		Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "address"}},
+			DoUpdates: clause.AssignmentColumns([]string{"last_seen"}),
+		}).
+		Create(&baker).Error
+
 	if err != nil {
-		r.logger.Warn("error while creating baker", "error", err)
+		r.logger.Warn("error while creating/updating baker", "error", err, "address", baker.Address)
 		return err
 	}
 
-	r.logger.Info("create baker", baker.Address)
+	r.logger.Info("created/updated baker", "address", baker.Address)
 	return nil
 }
 
