@@ -45,11 +45,6 @@ func (r *Repository) Create(ctx context.Context, delegationToCreate []domain.Cre
 	return nil
 }
 
-func (r *Repository) FindOneByID(ctx context.Context, id domain.ID) error {
-	//TODO implement me
-	panic("implement me")
-}
-
 func (r *Repository) FindAll(ctx context.Context) ([]models.Delegation, error) {
 	r.logger.Info("delegator repository FindAll")
 	res, err := gorm.G[models.Delegation](r.dbClient).Find(ctx)

@@ -21,7 +21,7 @@ func RegisterBaseRoutes(
 	xtz.GET("/delegations", func(c *gin.Context) {
 		res, err := useCase.GetDelegations(c)
 		if err != nil {
-			logger.Warn("failed to get delegations: ", err)
+			logger.Warn("failed to get delegations", "error", err)
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"msg": "failed to get delegations",
 			})

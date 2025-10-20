@@ -1,0 +1,25 @@
+all: false
+dir: 'mocks'
+filename: '{{.InterfaceName}}.go'
+force-file-write: true
+formatter: goimports
+include-auto-generated: false
+log-level: info
+structname: 'Mock{{.InterfaceName}}'
+pkgname: 'mocks'
+recursive: false
+require-template-schema-exists: true
+template: testify
+template-schema: '{{.Template}}.schema.json'
+packages:
+  delegator/pkg/domain:
+    config:
+      all: true
+      dir: 'mocks'
+  gorm.io/gorm:
+    interfaces:
+      DB:
+        config:
+          dir: 'mocks'
+          filename: 'GormDB.go'
+          structname: 'MockGormDB'

@@ -29,6 +29,11 @@ func WithLogger(logger *slog.Logger) Option {
 
 func (p *PGClient) Run(ctx context.Context) error {
 	p.Logger.Info("database client running")
+	err := p.Driver.Ping()
+	if err != nil {
+		p.Logger.Error("database client failed to start")
+		return err
+	}
 	return nil
 }
 
